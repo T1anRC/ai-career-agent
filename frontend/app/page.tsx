@@ -49,7 +49,7 @@ export default function Home() {
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
+  const [jobDescription, setJobDescription] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const updateProfileField = (
@@ -178,6 +178,21 @@ export default function Home() {
     );
   }
 
+  function handleJobMatchAnalyze() {
+    if (!jobDescription.trim()) {
+      alert("请先粘贴岗位 JD，再进行岗位匹配分析。");
+      return;
+    }
+
+    sendMessage(
+      `请基于我的用户画像，帮我分析下面这个岗位和我的匹配度，并给出投递建议、简历修改建议和面试准备重点。
+
+  岗位 JD：
+  ${jobDescription}`,
+      "job_match"
+    );
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     sendMessage(input);
@@ -228,6 +243,39 @@ export default function Home() {
             >
               一键优化简历项目
             </button>
+          </div>
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">
+                岗位 JD 匹配分析
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setJobDescription("")}
+                  disabled={isLoading || !jobDescription.trim()}
+                  className="rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  清空 JD
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleJobMatchAnalyze}
+                  disabled={isLoading || !jobDescription.trim()}
+                  className="rounded-full border border-purple-500 px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isLoading ? "分析中..." : "一键分析岗位匹配度"}
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              value={jobDescription}
+              onChange={(event) => setJobDescription(event.target.value)}
+              placeholder="请粘贴岗位 JD，例如岗位职责、任职要求、技术栈要求等..."
+             className="min-h-32 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-purple-400"
+            />
           </div>
         </header>
 

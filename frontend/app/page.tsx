@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -112,7 +113,7 @@ export default function Home() {
     });
   }, [messages, isLoading]);
 
-  async function sendMessage(content: string) {
+  async function sendMessage(content: string, mode: string = "chat") {
     const trimmedInput = content.trim();
 
     if (!trimmedInput || isLoading) {
@@ -138,7 +139,8 @@ export default function Home() {
         },
         body: JSON.stringify({
           messages: newMessages,
-          profile: profile,
+          profile,
+          mode,
         }),
       });
 
@@ -162,6 +164,18 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function handleResumeProjectOptimize() {
+    const projectText =
+      profile.projects.length > 0
+        ? profile.projects.join("、")
+        : "AI Career Agent";
+
+    sendMessage(
+      `请基于我的用户画像，帮我优化以下项目经历，让它可以直接写进简历，并给出面试讲解版本：${projectText}`,
+      "resume_project"
+    );
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -205,6 +219,14 @@ export default function Home() {
               className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
             >
               清空对话
+            </button>
+            <button
+              type="button"
+              onClick={handleResumeProjectOptimize}
+              disabled={isLoading}
+              className="rounded-full border border-blue-500 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              一键优化简历项目
             </button>
           </div>
         </header>
@@ -324,7 +346,34 @@ export default function Home() {
                     {message.role === "user" ? "你" : "AI Career Agent"}
                   </div>
 
-                  <div className="whitespace-pre-wrap">{message.content}</div>
+                  {message.role === "assistant" ? (
+                    <ReactMarkdown
+                      components={{
+                        h2: ({ ...props }) => (
+                          <h2 className="mt-4 mb-2 text-lg font-bold text-gray-900" {...props} />
+                        ),
+                        h3: ({ ...props }) => (
+                          <h3 className="mt-3 mb-2 text-base font-semibold text-gray-900" {...props} />
+                        ),
+                        p: ({ ...props }) => (
+                          <p className="mb-3 leading-7 text-gray-800" {...props} />
+                        ),
+                        ul: ({ ...props }) => (
+                          <ul className="mb-3 list-disc space-y-1 pl-5 text-gray-800" {...props} />
+                        ),
+                        li: ({ ...props }) => (
+                          <li className="leading-7" {...props} />
+                        ),
+                        strong: ({ ...props }) => (
+                          <strong className="font-semibold text-gray-900" {...props} />
+                        ),
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  )}
                 </div>
               </div>
             ))}

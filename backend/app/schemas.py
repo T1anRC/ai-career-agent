@@ -19,6 +19,7 @@ class UserProfile(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     profile: UserProfile = Field(default_factory=UserProfile)
+    mode: str = "chat"
 
 
 class ChatResponse(BaseModel):

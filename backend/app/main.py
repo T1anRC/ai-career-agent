@@ -28,7 +28,8 @@ def read_root():
 def chat(request: ChatRequest):
     reply = chat_with_deepseek(
         messages=request.messages,
-        profile=request.profile
+        profile=request.profile,
+        mode=request.mode
     )
 
     return ChatResponse(reply=reply)

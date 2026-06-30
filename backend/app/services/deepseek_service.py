@@ -3,7 +3,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 from app.schemas import ChatMessage, UserProfile
-from app.prompts import build_system_prompt
+from app.prompts import build_system_prompt, build_resume_project_prompt
 
 
 load_dotenv()
@@ -14,8 +14,11 @@ client = OpenAI(
 )
 
 
-def chat_with_deepseek(messages: list[ChatMessage], profile: UserProfile) -> str:
-    system_prompt = build_system_prompt(profile)
+def chat_with_deepseek(messages: list[ChatMessage], profile: UserProfile, mode: str = "chat") -> str:
+    if mode == "resume_project":
+        system_prompt = build_resume_project_prompt(profile)
+    else:
+        system_prompt = build_system_prompt(profile)
 
     api_messages = [
         {

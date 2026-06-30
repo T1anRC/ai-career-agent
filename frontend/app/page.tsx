@@ -208,6 +208,21 @@ export default function Home() {
     );
   }
 
+  function handleStudyPlanGenerate() {
+    const studyTarget = jobDescription.trim()
+      ? `岗位 JD：\n${jobDescription}`
+      : `目标岗位：${profile.target_role}`;
+
+    sendMessage(
+      `请基于我的用户画像，帮我为下面这个方向生成学习路线规划。
+
+  ${studyTarget}
+
+  请输出目标岗位分析、当前能力基础、核心短板、7 天学习计划、15 天项目提升路线、30 天能力提升路线、每日学习任务模板、练习项目建议和面试复习重点。`,
+      "study_plan"
+    );
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     sendMessage(input);
@@ -289,6 +304,14 @@ export default function Home() {
                   className="rounded-full border border-blue-500 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoading ? "生成中..." : "生成面试准备"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStudyPlanGenerate}
+                  disabled={isLoading}
+                  className="rounded-full border border-purple-500 px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isLoading ? "生成中..." : "生成学习计划"}
                 </button>
               </div>
             </div>

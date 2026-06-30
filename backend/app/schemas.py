@@ -20,7 +20,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     profile: UserProfile = Field(default_factory=UserProfile)
     mode: str = "chat"
-
+    resume_text: str = ""
 
 class ChatResponse(BaseModel):
     reply: str

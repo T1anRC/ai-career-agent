@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, ChangeEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 type ChatMessage = {
@@ -50,6 +50,10 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [jobDescription, setJobDescription] = useState("");
+  const [resumeText, setResumeText] = useState("");
+  const [resumeFileName, setResumeFileName] = useState("");
+  const [isParsingResume, setIsParsingResume] = useState(false);
+  const hasResumeText = resumeText.trim().length > 0;
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const updateProfileField = (
@@ -113,6 +117,24 @@ export default function Home() {
     });
   }, [messages, isLoading]);
 
+  useEffect(() => {
+    const savedResumeText = localStorage.getItem("ai-career-agent-resume-text");
+    const savedResumeFileName = localStorage.getItem("ai-career-agent-resume-file-name");
+
+    if (savedResumeText) {
+      setResumeText(savedResumeText);
+    }
+
+    if (savedResumeFileName) {
+      setResumeFileName(savedResumeFileName);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("ai-career-agent-resume-text", resumeText);
+    localStorage.setItem("ai-career-agent-resume-file-name", resumeFileName);
+  }, [resumeText, resumeFileName]);
+
   async function sendMessage(content: string, mode: string = "chat") {
     const trimmedInput = content.trim();
 
@@ -132,16 +154,29 @@ export default function Home() {
     setIsLoading(true);
 
     try {
+      const apiMessages =
+        mode === "chat" || mode === "rag"
+          ? newMessages
+          : [userMessage];
+
+      const requestBody = {
+        messages: apiMessages,
+        profile,
+        mode,
+        resume_text: resumeText,
+      };
+
+      console.log("发送给后端的数据：", requestBody);
+      console.log("发送给后端的简历长度：", resumeText.length);
+      console.log("当前模式：", mode);
+      console.log("实际发送的消息数量：", apiMessages.length);
+
       const response = await fetch("http://127.0.0.1:8000/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          messages: newMessages,
-          profile,
-          mode,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -167,15 +202,20 @@ export default function Home() {
   }
 
   function handleResumeProjectOptimize() {
-    const projectText =
-      profile.projects.length > 0
-        ? profile.projects.join("、")
-        : "AI Career Agent";
+    const hasResume = resumeText.trim().length > 0;
 
-    sendMessage(
-      `请基于我的用户画像，帮我优化以下项目经历，让它可以直接写进简历，并给出面试讲解版本：${projectText}`,
-      "resume_project"
-    );
+    const content = hasResume
+      ? `请基于我上传或粘贴的真实简历内容，帮我做一次简历项目优化。
+
+  要求：
+  1. 优先分析真实简历中已有的项目经历
+  2. 找出项目描述中不够清楚、不够有含金量的地方
+  3. 帮我改写成更适合投递实习岗位的简历表达
+  4. 不要编造我没有做过的功能
+  5. 输出可以直接放进简历的版本和面试讲解版本`
+      : `请基于我的用户画像，帮我优化我的项目经历，让它更适合写进简历和面试展示。`;
+
+    sendMessage(content, "resume_project");
   }
 
   function handleJobMatchAnalyze() {
@@ -185,10 +225,17 @@ export default function Home() {
     }
 
     sendMessage(
-      `请基于我的用户画像，帮我分析下面这个岗位和我的匹配度，并给出投递建议、简历修改建议和面试准备重点。
+      `请基于我的真实简历内容和岗位 JD，分析我和下面这个岗位的匹配度。
 
-  岗位 JD：
-  ${jobDescription}`,
+    请注意：
+    1. 如果我已经上传或粘贴了简历，请优先根据真实简历分析
+    2. 不要只根据用户画像泛泛判断
+    3. 请明确指出简历中已经体现的匹配点
+    4. 请明确指出简历中没有体现或表达不够清楚的短板
+    5. 请给出可以直接修改到简历里的优化建议
+
+    岗位 JD：
+    ${jobDescription}`,
       "job_match"
     );
   }
@@ -196,31 +243,52 @@ export default function Home() {
   function handleInterviewPrepare() {
     const interviewTarget = jobDescription.trim()
       ? `岗位 JD：\n${jobDescription}`
-      : `目标岗位：${profile.target_role}`;
+      : `目标岗位：${profile.target_role || "暂未填写"}`;
 
-    sendMessage(
-      `请基于我的用户画像，帮我准备下面这个方向的面试问答。
+    const content = resumeText.trim()
+      ? `请基于我的真实简历内容、用户画像和下面这个岗位方向，帮我准备面试。
+
+  要求：
+  1. 必须优先参考我上传或粘贴的真实简历内容
+  2. 面试问题要围绕简历中的项目经历展开
+  3. 项目追问要结合我真实做过的功能
+  4. 不要编造我没有做过的经历
+  5. 请输出高频面试问题、技术基础问题、项目追问问题、短板追问问题、第一人称回答示例和面试前复习清单
+
+  ${interviewTarget}`
+      : `请基于我的用户画像，帮我准备下面这个方向的面试问答。
 
   ${interviewTarget}
 
-  请输出高频面试问题、技术基础问题、项目追问问题、短板追问问题、第一人称回答示例和面试前复习清单。`,
-      "interview"
-    );
+  请输出高频面试问题、技术基础问题、项目追问问题、短板追问问题、第一人称回答示例和面试前复习清单。`;
+
+    sendMessage(content, "interview");
   }
 
   function handleStudyPlanGenerate() {
     const studyTarget = jobDescription.trim()
       ? `岗位 JD：\n${jobDescription}`
-      : `目标岗位：${profile.target_role}`;
+      : `目标岗位：${profile.target_role || "暂未填写"}`;
 
-    sendMessage(
-      `请基于我的用户画像，帮我为下面这个方向生成学习路线规划。
+    const content = resumeText.trim()
+      ? `请基于我的真实简历内容、用户画像和下面这个岗位方向，帮我生成学习路线规划。
+
+  要求：
+  1. 必须优先参考我上传或粘贴的真实简历内容
+  2. 请先判断我真实简历中已经具备哪些能力
+  3. 再指出我和目标岗位之间的差距
+  4. 学习计划要围绕真实短板制定
+  5. 不要只根据用户画像泛泛规划
+  6. 请输出目标岗位分析、当前能力基础、核心短板、7 天学习计划、15 天项目提升路线、30 天能力提升路线、每日学习任务模板、练习项目建议和面试复习重点
+
+  ${studyTarget}`
+      : `请基于我的用户画像，帮我为下面这个方向生成学习路线规划。
 
   ${studyTarget}
 
-  请输出目标岗位分析、当前能力基础、核心短板、7 天学习计划、15 天项目提升路线、30 天能力提升路线、每日学习任务模板、练习项目建议和面试复习重点。`,
-      "study_plan"
-    );
+  请输出目标岗位分析、当前能力基础、核心短板、7 天学习计划、15 天项目提升路线、30 天能力提升路线、每日学习任务模板、练习项目建议和面试复习重点。`;
+
+    sendMessage(content, "study_plan");
   }
 
   function handleRagQuestion() {
@@ -231,6 +299,40 @@ export default function Home() {
     }
 
     sendMessage(content, "rag");
+  }
+
+  async function handleResumeFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setIsParsingResume(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/resume/parse", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "简历解析失败");
+      }
+
+      setResumeText(data.resume_text || "");
+      setResumeFileName(data.filename || file.name);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "简历解析失败");
+    } finally {
+      setIsParsingResume(false);
+      event.target.value = "";
+    }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -281,8 +383,80 @@ export default function Home() {
               disabled={isLoading}
               className="rounded-full border border-blue-500 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              一键优化简历项目
+              {isLoading
+                ? "优化中..."
+                : hasResumeText
+                  ? "基于简历优化项目"
+                  : "一键优化简历项目"}
             </button>
+          </div>
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">
+                  简历内容
+                </h2>
+                <p className="mt-1 text-xs text-gray-500">
+                  可以上传 txt / pdf / docx 简历文件，也可以直接粘贴简历文本。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                    setResumeText("");
+                    setResumeFileName("");
+                    localStorage.removeItem("ai-career-agent-resume-text");
+                    localStorage.removeItem("ai-career-agent-resume-file-name");
+                  }}
+                className="rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                清空简历
+              </button>
+            </div>
+
+            <input
+              type="file"
+              accept=".txt,.pdf,.docx"
+              onChange={handleResumeFileUpload}
+              disabled={isParsingResume}
+              className="mb-2 block w-full text-sm text-gray-600 file:mr-4 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-600 hover:file:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+
+            {isParsingResume && (
+              <p className="mb-2 text-sm text-blue-600">
+                正在解析简历文件...
+              </p>
+            )}
+
+            {resumeFileName && !isParsingResume && (
+              <p className="mb-2 text-sm text-green-600">
+                已解析文件：{resumeFileName}
+              </p>
+            )}
+
+            <textarea
+              value={resumeText}
+              onChange={(event) => setResumeText(event.target.value)}
+              placeholder="请在这里粘贴你的简历内容，或者上传简历文件后自动解析..."
+              className="min-h-40 w-full resize-y rounded-xl border border-gray-300 p-3 text-sm leading-6 text-gray-900 outline-none placeholder:text-gray-400 focus:border-blue-500"
+            />
+
+            <div className="mt-2 flex items-center justify-between text-xs">
+              <p className="text-gray-400">
+                当前简历文本长度：{resumeText.length} 字符
+              </p>
+
+              {hasResumeText ? (
+                <p className="font-medium text-green-600">
+                  已接入真实简历，后续分析会优先参考简历内容
+                </p>
+              ) : (
+                <p className="font-medium text-orange-500">
+                  暂未接入简历，将主要根据用户画像分析
+                </p>
+              )}
+            </div>
           </div>
           <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
             <div className="mb-2 flex items-center justify-between">
@@ -305,7 +479,11 @@ export default function Home() {
                   disabled={isLoading || !jobDescription.trim()}
                   className="rounded-full border border-purple-500 px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isLoading ? "分析中..." : "一键分析岗位匹配度"}
+                  {isLoading
+                    ? "分析中..."
+                    : hasResumeText
+                      ? "基于简历分析匹配度"
+                      : "一键分析岗位匹配度"}
                 </button>
                 <button
                   type="button"
@@ -313,7 +491,11 @@ export default function Home() {
                   disabled={isLoading}
                   className="rounded-full border border-blue-500 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isLoading ? "生成中..." : "生成面试准备"}
+                  {isLoading
+                    ? "生成中..."
+                    : hasResumeText
+                      ? "基于简历生成面试准备"
+                      : "生成面试准备"}
                 </button>
                 <button
                   type="button"
@@ -321,7 +503,11 @@ export default function Home() {
                   disabled={isLoading}
                   className="rounded-full border border-purple-500 px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isLoading ? "生成中..." : "生成学习计划"}
+                  {isLoading
+                    ? "生成中..."
+                    : hasResumeText
+                      ? "基于简历生成学习计划"
+                      : "生成学习计划"}
                 </button>
               </div>
             </div>

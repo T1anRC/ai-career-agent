@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.services.resume_parser import parse_resume_file
 from app.schemas import ChatRequest, ChatResponse
 from app.services.deepseek_service import chat_with_deepseek
 
@@ -25,11 +26,39 @@ def read_root():
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+async def chat(request: ChatRequest):
+    print("当前 mode：", request.mode)
+    print("main.py 收到的简历长度：", len(request.resume_text or ""))
+    print("main.py 简历前100字：", (request.resume_text or "")[:100])
+
     reply = chat_with_deepseek(
         messages=request.messages,
         profile=request.profile,
-        mode=request.mode
+        mode=request.mode,
+        resume_text=request.resume_text,
     )
 
     return ChatResponse(reply=reply)
+
+
+@app.post("/api/resume/parse")
+async def parse_resume(file: UploadFile = File(...)):
+    """
+    上传简历文件，并解析为纯文本。
+    支持 txt、pdf、docx。
+    """
+
+    try:
+        resume_text = await parse_resume_file(file)
+
+        return {
+            "filename": file.filename,
+            "resume_text": resume_text,
+            "text_length": len(resume_text),
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"简历解析失败：{str(e)}")

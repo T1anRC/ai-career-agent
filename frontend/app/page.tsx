@@ -7,13 +7,37 @@ type ChatMessage = {
   content: string;
 };
 
+type UserProfile = {
+  target_role: string;
+  target_city: string;
+  skills: string[];
+  projects: string[];
+  weaknesses: string[];
+  goal: string;
+};
+
 const quickQuestions = [
   "我想找 Java 后端实习，但项目经验比较少，应该怎么准备？",
-  "我做过 YOLOv11 无人机检测系统，怎么写进简历？",
+  "我做过的项目，该怎么写进简历？",
   "我想去上海找软件开发实习，应该怎么规划？",
 ];
 
+const PROFILE_STORAGE_KEY = "ai-career-agent-profile";
+
+const defaultProfile: UserProfile = {
+  target_role: "AI 全栈开发实习生",
+  target_city: "上海",
+  skills: ["Python", "FastAPI", "Next.js", "Tailwind CSS", "Git"],
+  projects: ["AI Career Agent", "无人机检测系统"],
+  weaknesses: ["没有实习经历", "项目包装能力还不够"],
+  goal: "15天做出一个可以写进简历、可以面试展示的AI求职智能体项目",
+};
+
 export default function Home() {
+
+  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
+  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -27,6 +51,61 @@ export default function Home() {
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+  const updateProfileField = (
+    field: keyof UserProfile,
+    value: string | string[]
+  ) => {
+    setProfile((prevProfile) => ({
+      ...prevProfile,
+      [field]: value,
+    }));
+  };
+
+  const updateProfileListField = (
+    field: "skills" | "projects" | "weaknesses",
+    value: string
+  ) => {
+    const list = value
+      .split(/[,，、]/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+
+    setProfile((prevProfile) => ({
+      ...prevProfile,
+      [field]: list,
+    }));
+  };
+
+  const handleResetProfile = () => {
+    setProfile(defaultProfile);
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(defaultProfile));
+  };
+
+  // 读取本地保存的用户画像
+  useEffect(() => {
+    const savedProfile = localStorage.getItem(PROFILE_STORAGE_KEY);
+
+    if (savedProfile) {
+      try {
+        setProfile(JSON.parse(savedProfile));
+      } catch {
+        setProfile(defaultProfile);
+      }
+    }
+
+    setIsProfileLoaded(true);
+  }, []);
+
+  // 用户画像变化时自动保存
+  useEffect(() => {
+    if (!isProfileLoaded) {
+      return;
+    }
+
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  }, [profile, isProfileLoaded]);
+
+  // 聊天自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -59,6 +138,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           messages: newMessages,
+          profile: profile,
         }),
       });
 
@@ -146,6 +226,83 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  当前用户画像
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  AI Career Agent 会根据这些信息给出更精准的求职建议
+                </p>
+              </div>
+
+              <button
+                onClick={handleResetProfile}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                恢复默认画像
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <label className="text-gray-500">目标岗位</label>
+                <input
+                  value={profile.target_role}
+                  onChange={(e) => updateProfileField("target_role", e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-500">目标城市</label>
+                <input
+                  value={profile.target_city}
+                  onChange={(e) => updateProfileField("target_city", e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-500">技术栈</label>
+                <input
+                  value={profile.skills.join("、")}
+                  onChange={(e) => updateProfileListField("skills", e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-500">项目经历</label>
+                <input
+                  value={profile.projects.join("、")}
+                  onChange={(e) => updateProfileListField("projects", e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-500">当前短板</label>
+                <input
+                  value={profile.weaknesses.join("、")}
+                  onChange={(e) => updateProfileListField("weaknesses", e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-500">阶段目标</label>
+                <textarea
+                  value={profile.goal}
+                  onChange={(e) => updateProfileField("goal", e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                  rows={3}
+                />
+              </div>
+            </div>
+          </div>
 
         <section className="flex-1 rounded-2xl bg-white p-4 shadow-sm">
           <div className="flex h-[55vh] flex-col gap-4 overflow-y-auto pr-2">

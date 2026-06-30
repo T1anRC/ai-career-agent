@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.schemas import ChatRequest, ChatResponse
-from app.services.deepseek_service import get_ai_reply
+from app.services.deepseek_service import chat_with_deepseek
 
 
 app = FastAPI()
@@ -19,20 +19,16 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "AI Career Agent backend is running"}
+    return {
+        "message": "AI Career Agent backend is running"
+    }
 
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
-    if len(request.messages) == 0:
-        return ChatResponse(reply="请先输入你的问题。")
+    reply = chat_with_deepseek(
+        messages=request.messages,
+        profile=request.profile
+    )
 
-    try:
-        reply = get_ai_reply(request.messages)
-        return ChatResponse(reply=reply)
-
-    except Exception as e:
-        print("DeepSeek API Error:", e)
-        return ChatResponse(
-            reply="后端调用 AI 服务时出现错误，请检查 API Key、网络连接或后端日志。"
-        )
+    return ChatResponse(reply=reply)

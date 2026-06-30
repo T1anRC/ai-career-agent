@@ -1,6 +1,5 @@
-from typing import List, Literal
-
-from pydantic import BaseModel
+from typing import Literal
+from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
@@ -8,8 +7,18 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class UserProfile(BaseModel):
+    target_role: str = ""
+    target_city: str = ""
+    skills: list[str] = Field(default_factory=list)
+    projects: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    goal: str = ""
+
+
 class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
+    messages: list[ChatMessage]
+    profile: UserProfile = Field(default_factory=UserProfile)
 
 
 class ChatResponse(BaseModel):

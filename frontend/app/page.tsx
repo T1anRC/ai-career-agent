@@ -223,6 +223,16 @@ export default function Home() {
     );
   }
 
+  function handleRagQuestion() {
+    const content = input.trim();
+
+    if (!content || isLoading) {
+      return;
+    }
+
+    sendMessage(content, "rag");
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     sendMessage(input);
@@ -503,6 +513,14 @@ export default function Home() {
               className="w-24 rounded-xl bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               {isLoading ? "等待中" : "发送"}
+            </button>
+            <button
+              type="button"
+              onClick={handleRagQuestion}
+              disabled={isLoading || !input.trim()}
+              className="rounded-full border border-green-500 px-4 py-2 text-sm text-green-600 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              知识库问答
             </button>
           </div>
 

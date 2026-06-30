@@ -1,6 +1,7 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+from app.services.rag_service import retrieve_knowledge
 
 from app.schemas import ChatMessage, UserProfile
 from app.prompts import (
@@ -9,6 +10,7 @@ from app.prompts import (
     build_job_match_prompt,
     build_interview_prompt,
     build_study_plan_prompt,
+    build_rag_prompt,
 )
 
 
@@ -23,12 +25,28 @@ client = OpenAI(
 def chat_with_deepseek(messages: list[ChatMessage], profile: UserProfile, mode: str = "chat") -> str:
     if mode == "resume_project":
         system_prompt = build_resume_project_prompt(profile)
+
     elif mode == "job_match":
         system_prompt = build_job_match_prompt(profile)
+
     elif mode == "interview":
         system_prompt = build_interview_prompt(profile)
+
     elif mode == "study_plan":
         system_prompt = build_study_plan_prompt(profile)
+
+    elif mode == "rag":
+        latest_user_message = ""
+
+        for message in reversed(messages):
+            if message.role == "user":
+                latest_user_message = message.content
+                break
+
+        rag_context = retrieve_knowledge(latest_user_message)
+
+        system_prompt = build_rag_prompt(profile, rag_context)
+
     else:
         system_prompt = build_system_prompt(profile)
 

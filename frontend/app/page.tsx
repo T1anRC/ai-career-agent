@@ -193,6 +193,21 @@ export default function Home() {
     );
   }
 
+  function handleInterviewPrepare() {
+    const interviewTarget = jobDescription.trim()
+      ? `岗位 JD：\n${jobDescription}`
+      : `目标岗位：${profile.target_role}`;
+
+    sendMessage(
+      `请基于我的用户画像，帮我准备下面这个方向的面试问答。
+
+  ${interviewTarget}
+
+  请输出高频面试问题、技术基础问题、项目追问问题、短板追问问题、第一人称回答示例和面试前复习清单。`,
+      "interview"
+    );
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     sendMessage(input);
@@ -266,6 +281,14 @@ export default function Home() {
                   className="rounded-full border border-purple-500 px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoading ? "分析中..." : "一键分析岗位匹配度"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleInterviewPrepare}
+                  disabled={isLoading}
+                  className="rounded-full border border-blue-500 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isLoading ? "生成中..." : "生成面试准备"}
                 </button>
               </div>
             </div>

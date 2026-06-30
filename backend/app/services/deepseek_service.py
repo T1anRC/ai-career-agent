@@ -7,6 +7,7 @@ from app.prompts import (
     build_system_prompt,
     build_resume_project_prompt,
     build_job_match_prompt,
+    build_interview_prompt,
 )
 
 
@@ -23,6 +24,8 @@ def chat_with_deepseek(messages: list[ChatMessage], profile: UserProfile, mode: 
         system_prompt = build_resume_project_prompt(profile)
     elif mode == "job_match":
         system_prompt = build_job_match_prompt(profile)
+    elif mode == "interview":
+        system_prompt = build_interview_prompt(profile)
     else:
         system_prompt = build_system_prompt(profile)
 

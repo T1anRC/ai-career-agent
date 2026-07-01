@@ -3,6 +3,7 @@
 import { FormEvent, KeyboardEvent, ChangeEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -16,6 +17,25 @@ type UserProfile = {
   weaknesses: string[];
   goal: string;
 };
+
+type ChatSessionRecord = {
+  id: number;
+  user_id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type AnalysisRecord = {
+  id: number;
+  user_id: number;
+  analysis_type: string;
+  title: string;
+  input_text: string;
+  result_text: string;
+  created_at: string;
+};
+
 
 const quickQuestions = [
   "我想找 Java 后端实习，但项目经验比较少，应该怎么准备？",
@@ -55,6 +75,9 @@ export default function Home() {
   const [isParsingResume, setIsParsingResume] = useState(false);
   const hasResumeText = resumeText.trim().length > 0;
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+  const [chatSessions, setChatSessions] = useState<ChatSessionRecord[]>([]);
+  const [analysisRecords, setAnalysisRecords] = useState<AnalysisRecord[]>([]);
 
   const updateProfileField = (
     field: keyof UserProfile,
@@ -131,6 +154,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    loadProfileFromDatabase(false);
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem("ai-career-agent-resume-text", resumeText);
     localStorage.setItem("ai-career-agent-resume-file-name", resumeFileName);
   }, [resumeText, resumeFileName]);
@@ -146,6 +173,25 @@ export default function Home() {
       role: "user",
       content: trimmedInput,
     };
+
+
+    let sessionId = currentSessionId;
+
+    try {
+      if (!sessionId) {
+        const title =
+          trimmedInput.length > 20
+            ? trimmedInput.slice(0, 20) + "..."
+            : trimmedInput;
+        sessionId = await createChatSession(title || "新的对话");
+        setCurrentSessionId(sessionId);
+      }
+
+      await saveChatMessageToDatabase(sessionId, "user", trimmedInput);
+    } catch (error) {
+      console.error("保存用户消息失败：", error);
+    }
+
 
     const newMessages = [...messages, userMessage];
 
@@ -185,6 +231,36 @@ export default function Home() {
         role: "assistant",
         content: data.reply,
       };
+
+
+      try {
+        if (sessionId) {
+          await saveChatMessageToDatabase(
+            sessionId,
+            "assistant",
+            assistantMessage.content
+          );
+        }
+      } catch (error) {
+        console.error("保存 AI 回复失败：", error);
+      }
+
+      const analysisModes = ["resume_project", "job_match", "interview", "study_plan"];
+
+      if (analysisModes.includes(mode)) {
+        try {
+          await saveAnalysisRecordToDatabase(
+            mode,
+            getAnalysisTitle(mode, trimmedInput),
+            trimmedInput,
+            assistantMessage.content
+          );
+
+          console.log("分析记录已保存到数据库");
+        } catch (error) {
+          console.error("保存分析记录失败：", error);
+        }
+      }
 
       setMessages([...newMessages, assistantMessage]);
     } catch (error) {
@@ -289,6 +365,246 @@ export default function Home() {
   请输出目标岗位分析、当前能力基础、核心短板、7 天学习计划、15 天项目提升路线、30 天能力提升路线、每日学习任务模板、练习项目建议和面试复习重点。`;
 
     sendMessage(content, "study_plan");
+  }
+
+  async function handleSaveProfileToDatabase() {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(profile),
+      });
+
+      if (!response.ok) {
+        throw new Error("保存用户画像失败");
+      }
+
+      const data = await response.json();
+      console.log("用户画像已保存到数据库：", data);
+
+      alert("用户画像已保存到数据库");
+    } catch (error) {
+      console.error("保存用户画像失败：", error);
+      alert("保存用户画像失败，请检查后端是否启动");
+    }
+  }
+
+  async function loadProfileFromDatabase(showAlert = true) {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/profile");
+
+      if (!response.ok) {
+        throw new Error("读取用户画像失败");
+      }
+
+      const data = await response.json();
+
+      if (!data.profile) {
+        if (showAlert) {
+          alert("数据库里还没有保存用户画像");
+        }
+        return;
+      }
+
+      const dbProfile = data.profile;
+
+      setProfile({
+        target_role: dbProfile.target_role || "",
+        target_city: dbProfile.target_city || "",
+        skills: dbProfile.skills || [],
+        projects: dbProfile.projects || [],
+        weaknesses: dbProfile.weaknesses || [],
+        goal: dbProfile.goal || "",
+      });
+
+      if (showAlert) {
+        alert("已从数据库读取用户画像");
+      }
+    } catch (error) {
+      console.error("读取用户画像失败：", error);
+
+      if (showAlert) {
+        alert("读取用户画像失败，请检查后端是否启动");
+      }
+    }
+  }
+
+  async function handleLoadProfileFromDatabase() {
+    await loadProfileFromDatabase(true);
+  }
+
+  async function createChatSession(title: string) {
+    const response = await fetch("http://127.0.0.1:8000/api/chat-sessions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("创建聊天会话失败");
+    }
+
+    const data = await response.json();
+    return data.chat_session.id as number;
+  }
+
+  async function saveChatMessageToDatabase(
+    sessionId: number,
+    role: "user" | "assistant" | "system",
+    content: string
+  ) {
+    const response = await fetch("http://127.0.0.1:8000/api/chat-messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        role,
+        content,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("保存聊天消息失败");
+    }
+
+    return response.json();
+  }
+
+  async function handleLoadChatSessions() {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/chat-sessions");
+
+      if (!response.ok) {
+        throw new Error("读取历史会话失败");
+      }
+
+      const data = await response.json();
+
+      setChatSessions(data.chat_sessions || []);
+      alert(`已读取 ${data.count} 条历史会话`);
+    } catch (error) {
+      console.error("读取历史会话失败：", error);
+      alert("读取历史会话失败，请检查后端是否启动");
+    }
+  }
+
+  async function handleLoadChatMessages(sessionId: number) {
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/chat-sessions/${sessionId}/messages`
+      );
+
+      if (!response.ok) {
+        throw new Error("读取聊天消息失败");
+      }
+
+      const data = await response.json();
+
+      const loadedMessages: ChatMessage[] = (data.messages || []).map(
+        (message: { role: "user" | "assistant" | "system"; content: string }) => ({
+          role: message.role === "system" ? "assistant" : message.role,
+          content: message.content,
+        })
+      );
+
+      setMessages(loadedMessages);
+      setCurrentSessionId(sessionId);
+
+      alert(`已加载会话 #${sessionId}`);
+    } catch (error) {
+      console.error("读取聊天消息失败：", error);
+      alert("读取聊天消息失败，请检查后端是否启动");
+    }
+  }
+
+  async function saveAnalysisRecordToDatabase(
+    analysisType: string,
+    title: string,
+    inputText: string,
+    resultText: string
+  ) {
+    const response = await fetch("http://127.0.0.1:8000/api/analysis-records", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        analysis_type: analysisType,
+        title,
+        input_text: inputText,
+        result_text: resultText,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("保存分析记录失败");
+    }
+
+    return response.json();
+  }
+
+  async function handleLoadAnalysisRecords() {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/analysis-records");
+
+      if (!response.ok) {
+        throw new Error("读取分析记录失败");
+      }
+
+      const data = await response.json();
+
+      setAnalysisRecords(data.analysis_records || []);
+      alert(`已读取 ${data.count} 条分析记录`);
+    } catch (error) {
+      console.error("读取分析记录失败：", error);
+      alert("读取分析记录失败，请检查后端是否启动");
+    }
+  }
+
+  function handleOpenAnalysisRecord(record: AnalysisRecord) {
+    setMessages([
+      {
+        role: "user",
+        content: record.input_text || record.title,
+      },
+      {
+        role: "assistant",
+        content: record.result_text,
+      },
+    ]);
+
+    alert(`已打开分析记录 #${record.id}`);
+  }
+
+  function getAnalysisTitle(mode: string, inputText: string) {
+    const shortInput =
+      inputText.length > 20 ? inputText.slice(0, 20) + "..." : inputText;
+
+    if (mode === "job_match") {
+      return `岗位匹配分析：${shortInput || "未命名岗位"}`;
+    }
+
+    if (mode === "resume_project") {
+      return `简历项目优化：${shortInput || "未命名项目"}`;
+    }
+
+    if (mode === "interview") {
+      return `面试准备：${shortInput || "未命名岗位"}`;
+    }
+
+    if (mode === "study_plan") {
+      return `学习计划：${shortInput || "未命名目标"}`;
+    }
+
+    return `AI 分析记录：${shortInput || "未命名记录"}`;
   }
 
   function handleRagQuestion() {
@@ -549,6 +865,19 @@ export default function Home() {
                   AI Career Agent 会根据这些信息给出更精准的求职建议
                 </p>
               </div>
+              <button
+                onClick={handleSaveProfileToDatabase}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                保存画像到数据库
+              </button>
+              
+              <button
+                onClick={handleLoadProfileFromDatabase}
+                className="rounded-lg bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700"
+              >
+                从数据库读取画像
+              </button>
 
               <button
                 onClick={handleResetProfile}
@@ -615,6 +944,95 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+        <section className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">历史会话</h2>
+              <p className="text-sm text-gray-500">
+                从 PostgreSQL 读取已经保存的聊天会话
+              </p>
+            </div>
+
+            <button
+              onClick={handleLoadChatSessions}
+              className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+            >
+              查看历史会话
+            </button>
+          </div>
+
+        <section className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">分析记录</h2>
+              <p className="text-sm text-gray-500">
+                从 PostgreSQL 读取岗位匹配、简历优化、面试准备和学习计划记录
+              </p>
+            </div>
+
+            <button
+              onClick={handleLoadAnalysisRecords}
+              className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+            >
+              查看分析记录
+            </button>
+          </div>
+
+          {analysisRecords.length > 0 ? (
+            <div className="space-y-2">
+              {analysisRecords.map((record) => (
+                <div
+                  key={record.id}
+                  onClick={() => handleOpenAnalysisRecord(record)}
+                  className="cursor-pointer rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm hover:border-orange-400 hover:bg-orange-50"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-medium text-gray-900">
+                      #{record.id} {record.title}
+                    </div>
+
+                    <span className="rounded-full bg-orange-100 px-2 py-1 text-xs text-orange-700">
+                      {record.analysis_type}
+                    </span>
+                  </div>
+
+                  <div className="mt-1 text-xs text-gray-500">
+                    创建时间：{record.created_at}
+                  </div>
+
+                  <div className="mt-2 line-clamp-2 text-xs text-gray-600">
+                    {record.result_text}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">暂无分析记录，点击按钮读取。</p>
+          )}
+        </section>
+
+          {chatSessions.length > 0 ? (
+            <div className="space-y-2">
+              {chatSessions.map((session) => (
+                <div
+                  key={session.id}
+                  onClick={() => handleLoadChatMessages(session.id)}
+                  className="cursor-pointer rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm hover:border-purple-400 hover:bg-purple-50"
+                >
+                  <div className="font-medium text-gray-900">
+                    #{session.id} {session.title}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    更新时间：{session.updated_at}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">暂无历史会话，点击按钮读取。</p>
+          )}
+        </section>
 
         <section className="flex-1 rounded-2xl bg-white p-4 shadow-sm">
           <div className="flex h-[55vh] flex-col gap-4 overflow-y-auto pr-2">

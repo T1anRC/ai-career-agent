@@ -5,6 +5,7 @@ from app.services.resume_parser import parse_resume_file
 from app.schemas import ChatRequest, ChatResponse
 from app.services.deepseek_service import chat_with_deepseek
 from app.services.analysis_tools import analyze_resume_with_tools
+from app.services.rag_service import build_knowledge_base
 from typing import Annotated
 from sqlmodel import Session, select, SQLModel
 from app.database import create_db_and_tables, get_session
@@ -16,6 +17,8 @@ app = FastAPI()
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+    chunk_count = build_knowledge_base()
+    print(f"RAG 知识库初始化完成，写入 {chunk_count} 个片段")
 
 class ToolAnalysisRequest(BaseModel):
     resume_text: str
@@ -23,7 +26,7 @@ class ToolAnalysisRequest(BaseModel):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

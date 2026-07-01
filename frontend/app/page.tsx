@@ -44,6 +44,9 @@ const quickQuestions = [
 ];
 
 const PROFILE_STORAGE_KEY = "ai-career-agent-profile";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000"
+).replace(/\/$/, "");
 
 const defaultProfile: UserProfile = {
   target_role: "AI 全栈开发实习生",
@@ -53,40 +56,6 @@ const defaultProfile: UserProfile = {
   weaknesses: ["没有实习经历", "项目包装能力还不够"],
   goal: "15天做出一个可以写进简历、可以面试展示的AI求职智能体项目",
 };
-
-function SectionCard({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg">
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-white">{title}</h2>
-        {description && (
-          <p className="mt-1 text-xs leading-5 text-slate-400">
-            {description}
-          </p>
-        )}
-      </div>
-
-      {children}
-    </section>
-  );
-}
-
-function SmallBadge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
-      {children}
-    </span>
-  );
-}
-
 
 export default function Home() {
 
@@ -145,17 +114,21 @@ export default function Home() {
 
   // 读取本地保存的用户画像
   useEffect(() => {
-    const savedProfile = localStorage.getItem(PROFILE_STORAGE_KEY);
+    const timer = window.setTimeout(() => {
+      const savedProfile = localStorage.getItem(PROFILE_STORAGE_KEY);
 
-    if (savedProfile) {
-      try {
-        setProfile(JSON.parse(savedProfile));
-      } catch {
-        setProfile(defaultProfile);
+      if (savedProfile) {
+        try {
+          setProfile(JSON.parse(savedProfile));
+        } catch {
+          setProfile(defaultProfile);
+        }
       }
-    }
 
-    setIsProfileLoaded(true);
+      setIsProfileLoaded(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   // 用户画像变化时自动保存
@@ -175,20 +148,20 @@ export default function Home() {
   }, [messages, isLoading]);
 
   useEffect(() => {
-    const savedResumeText = localStorage.getItem("ai-career-agent-resume-text");
-    const savedResumeFileName = localStorage.getItem("ai-career-agent-resume-file-name");
+    const timer = window.setTimeout(() => {
+      const savedResumeText = localStorage.getItem("ai-career-agent-resume-text");
+      const savedResumeFileName = localStorage.getItem("ai-career-agent-resume-file-name");
 
-    if (savedResumeText) {
-      setResumeText(savedResumeText);
-    }
+      if (savedResumeText) {
+        setResumeText(savedResumeText);
+      }
 
-    if (savedResumeFileName) {
-      setResumeFileName(savedResumeFileName);
-    }
-  }, []);
+      if (savedResumeFileName) {
+        setResumeFileName(savedResumeFileName);
+      }
+    }, 0);
 
-  useEffect(() => {
-    loadProfileFromDatabase(false);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -251,7 +224,7 @@ export default function Home() {
       console.log("当前模式：", mode);
       console.log("实际发送的消息数量：", apiMessages.length);
 
-      const response = await fetch("http://127.0.0.1:8000/api/chat", {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -403,7 +376,7 @@ export default function Home() {
 
   async function handleSaveProfileToDatabase() {
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/profile", {
+      const response = await fetch(`${API_BASE_URL}/api/profile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -427,7 +400,7 @@ export default function Home() {
 
   async function loadProfileFromDatabase(showAlert = true) {
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/profile");
+      const response = await fetch(`${API_BASE_URL}/api/profile`);
 
       if (!response.ok) {
         throw new Error("读取用户画像失败");
@@ -469,8 +442,16 @@ export default function Home() {
     await loadProfileFromDatabase(true);
   }
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadProfileFromDatabase(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
   async function createChatSession(title: string) {
-    const response = await fetch("http://127.0.0.1:8000/api/chat-sessions", {
+    const response = await fetch(`${API_BASE_URL}/api/chat-sessions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -493,7 +474,7 @@ export default function Home() {
     role: "user" | "assistant" | "system",
     content: string
   ) {
-    const response = await fetch("http://127.0.0.1:8000/api/chat-messages", {
+    const response = await fetch(`${API_BASE_URL}/api/chat-messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -514,7 +495,7 @@ export default function Home() {
 
   async function handleLoadChatSessions() {
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/chat-sessions");
+      const response = await fetch(`${API_BASE_URL}/api/chat-sessions`);
 
       if (!response.ok) {
         throw new Error("读取历史会话失败");
@@ -533,7 +514,7 @@ export default function Home() {
   async function handleLoadChatMessages(sessionId: number) {
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/api/chat-sessions/${sessionId}/messages`
+        `${API_BASE_URL}/api/chat-sessions/${sessionId}/messages`
       );
 
       if (!response.ok) {
@@ -565,7 +546,7 @@ export default function Home() {
     inputText: string,
     resultText: string
   ) {
-    const response = await fetch("http://127.0.0.1:8000/api/analysis-records", {
+    const response = await fetch(`${API_BASE_URL}/api/analysis-records`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -587,7 +568,7 @@ export default function Home() {
 
   async function handleLoadAnalysisRecords() {
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/analysis-records");
+      const response = await fetch(`${API_BASE_URL}/api/analysis-records`);
 
       if (!response.ok) {
         throw new Error("读取分析记录失败");
@@ -664,7 +645,7 @@ export default function Home() {
     formData.append("file", file);
     
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/resume/parse", {
+      const response = await fetch(`${API_BASE_URL}/api/resume/parse`, {
         method: "POST",
         body: formData,
       });

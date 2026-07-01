@@ -1,13 +1,16 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
+from pydantic import BaseModel
 from app.services.resume_parser import parse_resume_file
 from app.schemas import ChatRequest, ChatResponse
 from app.services.deepseek_service import chat_with_deepseek
-
+from app.services.analysis_tools import analyze_resume_with_tools
 
 app = FastAPI()
 
+class ToolAnalysisRequest(BaseModel):
+    resume_text: str
+    jd_text: str = ""
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +43,17 @@ async def chat(request: ChatRequest):
 
     return ChatResponse(reply=reply)
 
+@app.post("/api/tools/analyze")
+def analyze_with_tools(request: ToolAnalysisRequest):
+    tool_result = analyze_resume_with_tools(
+        resume_text=request.resume_text,
+        jd_text=request.jd_text,
+    )
+
+    return {
+        "message": "工具分析成功",
+        "tool_result": tool_result,
+    }
 
 @app.post("/api/resume/parse")
 async def parse_resume(file: UploadFile = File(...)):

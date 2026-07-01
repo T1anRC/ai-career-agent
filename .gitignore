@@ -11,3 +11,6 @@ backend/.env
 # system
 .DS_Store
 Thumbs.db
+
+# Chroma local vector database
+backend/app/chroma_db/
